@@ -52,7 +52,7 @@ jobs:
       - name: Run Playwright tests
         run: |
           cd automation
-          npx playwright test tests/desktop-tests/search-tests/srp-search-tests/common-srp.spec.ts --grep="Location Selection ATV" --retries=0
+          npx playwright test --project="chromium"
 
       - name: Generate Allure report
         if: always()
