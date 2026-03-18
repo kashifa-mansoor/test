@@ -96,7 +96,7 @@ jobs:
       - name: Run tests
         run: |
           cd automation
-          allurectl watch -- ENV=${{ steps.extract_info.outputs.BASE_ENV }} npx playwright test --project="chromium"
+          allurectl watch -- npx playwright test --project="chromium"
 
       # -----------------------
       # Capture ALLURE_JOB_RUN_ID
