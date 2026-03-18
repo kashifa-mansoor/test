@@ -53,7 +53,7 @@ jobs:
       - name: Run tests
         run: |
           cd automation
-          npx playwright test --project="chromium"
+          npx playwright test --project="firefox"
 
       - name: Generate Allure report
         if: always()
