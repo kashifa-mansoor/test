@@ -1,4 +1,4 @@
-name: Allure Reports (Simple History)
+name: Allure Reports (Pages History)
 
 on:
   pull_request:
@@ -9,12 +9,14 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
+      contents: read
       pages: write
       id-token: write
-      contents: read
-      actions: read
 
     steps:
+      # -----------------------
+      # Checkout repos
+      # -----------------------
       - name: Checkout application repo
         uses: actions/checkout@v4
 
@@ -27,7 +29,7 @@ jobs:
           path: automation
 
       # -----------------------
-      # Setup Node (MISSING)
+      # Setup Node + deps
       # -----------------------
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -39,16 +41,16 @@ jobs:
           cd automation
           npm ci
 
-      - name: Install Playwright Browsers
+      - name: Install Playwright browsers
         run: |
           cd automation
-          npx playwright install
+          npx playwright install chromium
 
-      - name: Install Allure
+      - name: Install Allure CLI
         run: npm install -g allure-commandline
 
       # -----------------------
-      # Run tests (FIXED syntax)
+      # Run tests
       # -----------------------
       - name: Run tests
         run: |
@@ -62,21 +64,23 @@ jobs:
           npx allure generate allure-results --clean -o allure-report
 
       # -----------------------
-      # Download previous bundle
+      # Get existing Pages content
       # -----------------------
-      - name: Download previous reports bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: reports-bundle
-          path: site
-        continue-on-error: true
+      - name: Fetch existing reports from gh-pages
+        run: |
+          git clone --depth=1 https://github.com/${{ github.repository }}.git gh-pages --branch=gh-pages || true
+
+          mkdir -p site
+
+          if [ -d "gh-pages" ]; then
+            cp -r gh-pages/* site/ || true
+          fi
 
       # -----------------------
-      # Add current report (FIXED PATH)
+      # Add current report
       # -----------------------
       - name: Add current report
         run: |
-          mkdir -p site
           cp -r automation/allure-report site/run-${{ github.run_number }}
 
       # -----------------------
@@ -88,7 +92,7 @@ jobs:
           ls -dt run-* 2>/dev/null | tail -n +11 | xargs rm -rf || true
 
       # -----------------------
-      # Create index page
+      # Generate index page
       # -----------------------
       - name: Generate index
         run: |
@@ -101,15 +105,6 @@ jobs:
           echo "</ul>" >> site/index.html
 
       # -----------------------
-      # Upload bundle (for next run)
-      # -----------------------
-      - name: Upload reports bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: reports-bundle
-          path: site
-
-      # -----------------------
       # Deploy to Pages
       # -----------------------
       - name: Upload Pages artifact
@@ -118,10 +113,11 @@ jobs:
           path: site
 
       - name: Deploy to Pages
+        id: deployment
         uses: actions/deploy-pages@v4
 
       # -----------------------
-      # PR Comment (FIXED URL)
+      # PR Comment with link
       # -----------------------
       - name: Comment PR
         if: github.event_name == 'pull_request'
