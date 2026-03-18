@@ -7,6 +7,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      ALLURE_RESULTS: "build/allure-results"
 
     permissions:
       contents: read
