@@ -1,33 +1,42 @@
-name: Allure Reports (Simple History)
+name: Playwright + Allure + TestOps
 
 on:
   pull_request:
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
+  test:
     runs-on: ubuntu-latest
 
+    env:
+      ALLURE_RESULTS: allure-results
+      PR_NUMBER: ${{ github.event.number }}
+      
+
     permissions:
-      pages: write
-      id-token: write
       contents: read
       actions: read
+      pull-requests: write
+      pages: write
+      id-token: write
 
     steps:
+      # -----------------------
+      # Checkout repos
+      # -----------------------
       - name: Checkout application repo
         uses: actions/checkout@v4
 
       - name: Checkout automation repo
         uses: actions/checkout@v4
         with:
-          repository: repo-name
+          repository: kashifa-mansoor/sample-repo
           ref: main
           token: ${{ secrets.SAMPLE_REPO_TOKEN }}
           path: automation
 
       # -----------------------
-      # Setup Node (MISSING)
+      # Setup Node
       # -----------------------
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -44,17 +53,67 @@ jobs:
           cd automation
           npx playwright install chromium
 
-      - name: Install Allure
-        run: npm install -g allure-commandline
+      - name: Extract ENV to run tests
+        id: extract_info
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const description = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: ${{ env.PR_NUMBER }}
+            }).then(response => response.data.body);
+            console.log("PR Description:", description);
+            let baseENV = `${{ env.PR_NUMBER }}.ssr.prod`;
+
+            const match = description.match(/NUXT_API_SUBDOMAIN=(\S+)/m);
+            if (match && match[1]) {
+              const subdomain = match[1].trim();
+              let env = "prod";
+              if (subdomain === "www") {
+                env = "www";
+              } else {
+                env = subdomain.split('.').pop();
+              }
+              baseENV = baseENV.replace("prod", env);
+            }
+            console.log("Final ENV:", baseENV);
+            core.setOutput("BASE_ENV", baseENV);
 
       # -----------------------
-      # Run tests (FIXED syntax)
+      # Setup Allure TestOps
+      # -----------------------
+      - name: Install and configure allurectl
+        uses: allure-framework/setup-allurectl@v1.0.2
+        with:
+          allure-endpoint: ${{ secrets.ALLURE_ENDPOINT }}
+          allure-project-id: ${{ secrets.ALLURE_PROJECT_ID }}
+          allure-token: ${{ secrets.ALLURE_TOKEN }}
+
+      # -----------------------
+      # Run tests with TestOps tracking
       # -----------------------
       - name: Run tests
         run: |
           cd automation
-          npx playwright test --project="chromium"
+          allurectl watch -- npx playwright test --project="chromium"
 
+      # -----------------------
+      # Capture ALLURE_JOB_RUN_ID
+      # -----------------------
+      - name: Export Allure Job Run ID
+        if: always()
+        run: echo "ALLURE_JOB_RUN_ID=$ALLURE_JOB_RUN_ID" >> $GITHUB_ENV
+
+      # -----------------------
+      # Install Allure CLI
+      # -----------------------
+      - name: Install Allure CLI
+        run: npm install -g allure-commandline
+
+      # -----------------------
+      # Generate Allure HTML report
+      # -----------------------
       - name: Generate Allure report
         if: always()
         run: |
@@ -62,76 +121,108 @@ jobs:
           npx allure generate allure-results --clean -o allure-report
 
       # -----------------------
-      # Download previous bundle
+      # Upload Artifacts (history)
       # -----------------------
-      - name: Download previous reports bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: reports-bundle
-          path: site
-        continue-on-error: true
-
-      # -----------------------
-      # Add current report (FIXED PATH)
-      # -----------------------
-      - name: Add current report
-        run: |
-          mkdir -p site
-          cp -r automation/allure-report site/run-${{ github.run_number }}
-
-      # -----------------------
-      # Keep only last 10 reports
-      # -----------------------
-      - name: Cleanup old reports
-        run: |
-          cd site
-          ls -dt run-* 2>/dev/null | tail -n +11 | xargs rm -rf || true
-
-      # -----------------------
-      # Create index page
-      # -----------------------
-      - name: Generate index
-        run: |
-          echo "<h1>Allure Reports</h1><ul>" > site/index.html
-          for d in site/run-*; do
-            [ -d "$d" ] || continue
-            NAME=$(basename $d)
-            echo "<li><a href=\"$NAME/index.html\">$NAME</a></li>" >> site/index.html
-          done
-          echo "</ul>" >> site/index.html
-
-      # -----------------------
-      # Upload bundle (for next run)
-      # -----------------------
-      - name: Upload reports bundle
+      - name: Upload Playwright HTML report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: reports-bundle
-          path: site
+          name: html-report-${{ github.run_number }}
+          path: automation/playwright-report
+          retention-days: 14
+
+      - name: Upload Allure HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report-${{ github.run_number }}
+          path: automation/allure-report
+          retention-days: 14
+
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-${{ github.run_number }}
+          path: automation/${{ env.ALLURE_RESULTS }}
+          retention-days: 14
 
       # -----------------------
-      # Deploy to Pages
+      # Deploy latest report to GitHub Pages
       # -----------------------
+      - name: Prepare Pages content
+        if: always()
+        run: |
+          mkdir site
+          cp -r automation/allure-report/* site/
+
       - name: Upload Pages artifact
+        if: always()
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
-      - name: Deploy to Pages
+      - name: Deploy to GitHub Pages
+        if: always()
         uses: actions/deploy-pages@v4
 
       # -----------------------
-      # PR Comment (FIXED URL)
+      # PR Comment with links
       # -----------------------
       - name: Comment PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
+        env:
+          ALLURE_ENDPOINT: ${{ secrets.ALLURE_ENDPOINT }}
+          ALLURE_PROJECT_ID: ${{ secrets.ALLURE_PROJECT_ID }}
+          ALLURE_JOB_RUN_ID: ${{ env.ALLURE_JOB_RUN_ID }}
         with:
           script: |
-            const url = `https://${context.repo.owner}.github.io/${context.repo.repo}/run-${context.runNumber}/index.html`;
-            github.rest.issues.createComment({
+            const runUrl =
+              "https://github.com/" +
+              context.repo.owner +
+              "/" +
+              context.repo.repo +
+              "/actions/runs/" +
+              context.runId;
+
+            const pagesUrl =
+              "https://" +
+              context.repo.owner +
+              ".github.io/" +
+              context.repo.repo +
+              "/";
+
+            const testOpsUrl =
+              process.env.ALLURE_ENDPOINT +
+              "/project/" +
+              process.env.ALLURE_PROJECT_ID +
+              "/launches/job-run/" +
+              process.env.ALLURE_JOB_RUN_ID;
+
+            const body =
+              "### 📊 Test Reports\n\n" +
+
+              "🔹 **Allure TestOps (Exact Run):**\n" +
+              testOpsUrl + "\n\n" +
+
+              "🔹 **Latest Allure Report (GitHub Pages):**\n" +
+              pagesUrl + "\n\n" +
+
+              "🔹 **Download Reports (Artifacts):**\n" +
+              runUrl + "\n\n" +
+
+              "---\n" +
+              "### 📦 Includes:\n" +
+              "- Playwright HTML Report\n" +
+              "- Allure HTML Report\n" +
+              "- Allure Raw Results\n\n" +
+
+              "👉 Use TestOps if you have access, otherwise download artifacts";
+
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `📊 Allure Report: ${url}`
+              body: body
             });
