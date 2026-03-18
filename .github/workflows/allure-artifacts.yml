@@ -10,6 +10,8 @@ jobs:
 
     env:
       ALLURE_RESULTS: allure-results
+      PR_NUMBER: ${{ github.event.number }}
+      
 
     permissions:
       contents: read
@@ -51,6 +53,33 @@ jobs:
           cd automation
           npx playwright install chromium
 
+      - name: Extract ENV to run tests
+        id: extract_info
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const description = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: ${{ env.PR_NUMBER }}
+            }).then(response => response.data.body);
+            console.log("PR Description:", description);
+            let baseENV = `${{ env.PR_NUMBER }}.ssr.prod`;
+
+            const match = description.match(/NUXT_API_SUBDOMAIN=(\S+)/m);
+            if (match && match[1]) {
+              const subdomain = match[1].trim();
+              let env = "prod";
+              if (subdomain === "www") {
+                env = "www";
+              } else {
+                env = subdomain.split('.').pop();
+              }
+              baseENV = baseENV.replace("prod", env);
+            }
+            console.log("Final ENV:", baseENV);
+            core.setOutput("BASE_ENV", baseENV);
+
       # -----------------------
       # Setup Allure TestOps
       # -----------------------
@@ -67,6 +96,8 @@ jobs:
       - name: Run tests
         run: |
           cd automation
+          console.log(${{ steps.extract_info.outputs.BASE_ENV }})
+
           allurectl watch -- npx playwright test --project="chromium"
 
       # -----------------------
