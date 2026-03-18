@@ -30,7 +30,6 @@ jobs:
         with:
           repository: kashifa-mansoor/sample-repo
           ref: main
-          ref: main
           token: ${{ secrets.SAMPLE_REPO_TOKEN }}
           path: automation
 
