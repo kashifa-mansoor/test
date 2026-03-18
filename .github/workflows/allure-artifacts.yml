@@ -46,6 +46,13 @@ jobs:
           cd automation
           npx playwright install chromium
 
+      - name: Install and configure allurectl
+        uses: allure-framework/setup-allurectl@v1.0.2
+        with:
+          allure-endpoint: ${{ secrets.ALLURE_ENDPOINT }}
+          allure-project-id: 1
+          allure-token: ${{ secrets.ALLURE_TOKEN }}
+
       # -----------------------
       # Run tests
       # (Playwright config already generates HTML + allure-results)
@@ -53,7 +60,7 @@ jobs:
       - name: Run tests
         run: |
           cd automation
-          npx playwright test --project="chromium"
+          allurectl watch -- npx playwright test --project="chromium"
 
       # -----------------------
       # Install Allure CLI
@@ -100,23 +107,23 @@ jobs:
       # -----------------------
       # Install Allure TestOps CLI
       # -----------------------
-      - name: Install Allure TestOps CLI
-        run: |
-          curl -o allurectl https://github.com/allure-framework/allurectl/releases/latest/download/allurectl_linux_amd64
-          chmod +x allurectl
-          sudo mv allurectl /usr/local/bin/
+      # - name: Install Allure TestOps CLI
+      #   run: |
+      #     curl -o allurectl https://github.com/allure-framework/allurectl/releases/latest/download/allurectl_linux_amd64
+      #     chmod +x allurectl
+      #     sudo mv allurectl /usr/local/bin/
 
       # -----------------------
       # Upload results to Allure TestOps
       # -----------------------
-      - name: Upload to Allure TestOps
-        if: always()
-        run: |
-          allurectl upload \
-            --endpoint ${{ secrets.ALLURE_ENDPOINT }} \
-            --token ${{ secrets.ALLURE_TOKEN }} \
-            --project-id ${{ secrets.ALLURE_PROJECT_ID }} \
-            automation/allure-results
+      # - name: Upload to Allure TestOps
+      #   if: always()
+      #   run: |
+      #     allurectl upload \
+      #       --endpoint ${{ secrets.ALLURE_ENDPOINT }} \
+      #       --token ${{ secrets.ALLURE_TOKEN }} \
+      #       --project-id ${{ secrets.ALLURE_PROJECT_ID }} \
+      #       automation/allure-results
 
       # -----------------------
       # PR Comment with links
