@@ -139,13 +139,13 @@ jobs:
           path: automation/allure-report
           retention-days: 14
 
-      # - name: Upload Allure results
-      #   if: always()
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: allure-results-${{ github.run_number }}
-      #     path: automation/${{ env.ALLURE_RESULTS }}
-      #     retention-days: 14
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-${{ github.run_number }}
+          path: automation/${{ env.ALLURE_RESULTS }}
+          retention-days: 14
 
       # -----------------------
       # Deploy latest report to GitHub Pages
