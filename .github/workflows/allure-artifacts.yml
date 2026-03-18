@@ -12,22 +12,54 @@ jobs:
       pages: write
       id-token: write
       contents: read
+      actions: read
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout application repo
+        uses: actions/checkout@v4
+
+      - name: Checkout automation repo
+        uses: actions/checkout@v4
+        with:
+          repository: repo-name
+          ref: main
+          token: ${{ secrets.SAMPLE_REPO_TOKEN }}
+          path: automation
 
       # -----------------------
-      # Run tests
+      # Setup Node (MISSING)
       # -----------------------
-      - name: Install deps
-        run: npm ci
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
+      - name: Install dependencies
+        run: |
+          cd automation
+          npm ci
+
+      - name: Install Playwright Browsers
+        run: |
+          cd automation
+          npx playwright install chromium
+
+      - name: Install Allure
+        run: npm install -g allure-commandline
+
+      # -----------------------
+      # Run tests (FIXED syntax)
+      # -----------------------
       - name: Run tests
-        run: npx playwright test --project="chromium"
+        run: |
+          cd automation
+          npx playwright test --project="chromium"
 
       - name: Generate Allure report
         if: always()
-        run: npx allure generate allure-results --clean -o allure-report
+        run: |
+          cd automation
+          npx allure generate allure-results --clean -o allure-report
 
       # -----------------------
       # Download previous bundle
@@ -40,12 +72,12 @@ jobs:
         continue-on-error: true
 
       # -----------------------
-      # Add current report
+      # Add current report (FIXED PATH)
       # -----------------------
       - name: Add current report
         run: |
           mkdir -p site
-          cp -r allure-report site/run-${{ github.run_number }}
+          cp -r automation/allure-report site/run-${{ github.run_number }}
 
       # -----------------------
       # Keep only last 10 reports
@@ -53,7 +85,7 @@ jobs:
       - name: Cleanup old reports
         run: |
           cd site
-          ls -dt run-* | tail -n +11 | xargs rm -rf || true
+          ls -dt run-* 2>/dev/null | tail -n +11 | xargs rm -rf || true
 
       # -----------------------
       # Create index page
@@ -62,6 +94,7 @@ jobs:
         run: |
           echo "<h1>Allure Reports</h1><ul>" > site/index.html
           for d in site/run-*; do
+            [ -d "$d" ] || continue
             NAME=$(basename $d)
             echo "<li><a href=\"$NAME/index.html\">$NAME</a></li>" >> site/index.html
           done
@@ -88,14 +121,14 @@ jobs:
         uses: actions/deploy-pages@v4
 
       # -----------------------
-      # PR Comment
+      # PR Comment (FIXED URL)
       # -----------------------
       - name: Comment PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
-            const url = `https://${context.repo.owner}.github.io/${context.repo.repo}/run-${context.runNumber}/`;
+            const url = `https://${context.repo.owner}.github.io/${context.repo.repo}/run-${context.runNumber}/index.html`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
