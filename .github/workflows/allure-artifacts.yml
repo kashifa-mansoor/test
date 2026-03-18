@@ -21,7 +21,7 @@ jobs:
       - name: Checkout automation repo
         uses: actions/checkout@v4
         with:
-          repository: repo-name
+          repository: kashifa-mansoor/sample-repo
           ref: main
           token: ${{ secrets.SAMPLE_REPO_TOKEN }}
           path: automation
