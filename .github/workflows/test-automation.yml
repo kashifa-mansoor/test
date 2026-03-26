@@ -1,0 +1,20 @@
+name: Test Automation
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+
+  # ONLY when a label is added to PR
+  pull_request:
+    types: [labeled]
+
+jobs:
+  run-test-automation:
+    # Run only if the added label is the one we care about
+    if: github.event.label.name == 'test-automation-trigger'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run automation
+        run: |
+          echo "Triggered by label: test-automation-trigger"
