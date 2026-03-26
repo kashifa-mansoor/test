@@ -11,7 +11,7 @@ on:
 jobs:
   run-test-automation:
     # Run only if the added label is the one we care about
-    if: github.event.label.name == 'test-automation-trigger'
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'test-automation-trigger'
     runs-on: ubuntu-latest
 
     steps:
